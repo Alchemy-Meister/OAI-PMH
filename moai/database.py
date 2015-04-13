@@ -231,125 +231,14 @@ class SQLDatabase(object):
           sql.Column('action_time', sql.DateTime(timezone=True), nullable=False),
           sql.Column('user_id', sql.Integer, nullable=False),
           sql.Column('content_type_id', sql.Integer, sql.ForeignKey('django_content_type.id')),
-          sql.Column('object_id', sql.Unicode),
+          sql.Column('object_id', sql.Integer),
           sql.Column('object_repr', sql.Unicode, nullable=False),
-          sql.Column('action_flag', sql.Integer, nullable=False),
+          sql.Column('action_flag', sql.Unicode, nullable=False),
           sql.Column('change_message', sql.Unicode, nullable=False))
 
         db.create_all()
         return db
-
-    def flush(self):
-        oai_ids = set()
-        for row in sql.select([self._records.c.record_id]).execute():
-            oai_ids.add(row[0])
-        for row in sql.select([self._sets.c.set_id]).execute():
-            oai_ids.add(row[0])
-
-        deleted_records = []
-        deleted_sets = []
-        deleted_setrefs = []
-
-        inserted_records = []
-        inserted_sets = []
-        inserted_setrefs = []
-
-        
-        for oai_id, item in self._cache['records'].items():
-            if oai_id in oai_ids:
-                # record allready exists
-                deleted_records.append(oai_id)
-            item['record_id'] = oai_id
-            inserted_records.append(item)
-
-        for oai_id, item in self._cache['sets'].items():
-            if oai_id in oai_ids:
-                # set allready exists
-                deleted_sets.append(oai_id)
-            item['set_id'] = oai_id
-            inserted_sets.append(item)
-
-        for record_id, set_ids in self._cache['setrefs'].items():
-            deleted_setrefs.append(record_id)
-            for set_id in set_ids:
-                inserted_setrefs.append(
-                    {'record_id':record_id, 'set_id': set_id})
-
-        # delete all processed records before inserting
-        if deleted_records:
-            self._records.delete(
-                self._records.c.record_id == sql.bindparam('record_id')
-                ).execute(
-                [{'record_id': rid} for rid in deleted_records])
-        if deleted_sets:
-            self._sets.delete(
-                self._sets.c.set_id == sql.bindparam('set_id')
-                ).execute(
-                [{'set_id': sid} for sid in deleted_sets])
-        if deleted_setrefs:
-            self._setrefs.delete(
-                self._setrefs.c.record_id == sql.bindparam('record_id')
-                ).execute(
-                [{'record_id': rid} for rid in deleted_setrefs])
-
-        # batch inserts
-        if inserted_records:
-            self._records.insert().execute(inserted_records)
-        if inserted_sets:
-            self._sets.insert().execute(inserted_sets)
-        if inserted_setrefs:
-            self._setrefs.insert().execute(inserted_setrefs)
-
-        self._reset_cache()
-
-    def _reset_cache(self):
-        self._cache = {'records': {}, 'sets': {}, 'setrefs': {}}
-        
-            
-    def update_record(self, oai_id, modified, deleted, sets, metadata):
-        # adds a record, call flush to actually store in db
-
-        check_type(oai_id,
-                   unicode,
-                   prefix="record %s" % oai_id,
-                   suffix='for parameter "oai_id"')
-        check_type(modified,
-                   datetime.datetime,
-                   prefix="record %s" % oai_id,
-                   suffix='for parameter "modified"')
-        check_type(deleted,
-                   bool,
-                   prefix="record %s" % oai_id,
-                   suffix='for parameter "deleted"')
-        check_type(sets,
-                   dict,
-                   unicode_values=True,
-                   recursive=True,
-                   prefix="record %s" % oai_id,
-                   suffix='for parameter "sets"')
-        check_type(metadata,
-                   dict,
-                   prefix="record %s" % oai_id,
-                   suffix='for parameter "metadata"')
-
-        def date_handler(obj):
-            if hasattr(obj, 'isoformat'):
-                return obj.isoformat()
-            else:
-                raise TypeError, 'Object of type %s with value of %s is not JSON serializable' % (type(obj), repr(obj))
-
-        metadata = json.dumps(metadata, default=date_handler)
-        self._cache['records'][oai_id] = (dict(modified=modified,
-                                               deleted=deleted,
-                                               metadata=metadata))
-        self._cache['setrefs'][oai_id] = []
-        for set_id in sets:
-            self._cache['sets'][set_id] = dict(
-                name = sets[set_id]['name'],
-                description = sets[set_id].get('description'),
-                hidden = sets[set_id].get('hidden', False))
-            self._cache['setrefs'][oai_id].append(set_id)
-            
+         
     def get_record(self, oai_id):
         row = self._records.select(
             self._records.c.id == oai_id).execute().fetchone()
@@ -394,18 +283,6 @@ class SQLDatabase(object):
     def set_count(self):
         return sql.select([sql.func.count('*')],
                           from_obj=[self._sets]).execute().fetchone()[0]
-        
-    def remove_record(self, oai_id):
-        self._records.delete(
-            self._records.c.record_id == oai_id).execute()
-        self._setrefs.delete(
-            self._setrefs.c.record_id == oai_id).execute()
-
-    def remove_set(self, oai_id):
-        self._sets.delete(
-            self._sets.c.set_id == oai_id).execute()
-        self._setrefs.delete(
-            self._setrefs.c.set_id == oai_id).execute()
 
     def oai_sets(self, offset=0, batch_size=20):
         for row in self._sets.select(
@@ -482,8 +359,6 @@ class SQLDatabase(object):
         self._djangoContentType.c.app_label == app_label).execute().fetchone()
 
     def search_logs(self, content_type, object_id):
-      print object_id
-      print unicode(object_id)
       return self._djangoLog.select().where(
         self._djangoLog.c.object_id == unicode(object_id)).where(
         self._djangoLog.c.content_type_id == content_type).execute().fetchall()
@@ -623,10 +498,10 @@ class SQLDatabase(object):
         ids[2][0] = 1
       authors = self.search_all_records_author(record.id)
       for author in authors:
-        ids[3].append(author)
+        ids[3].append(author.author_id)
       tags = self.search_all_tags(record.id)
       for tag in tags:
-        ids[4].append(tag)
+        ids[4].append(tag.tag_id)
       
       tables = []
       tables.append(self.table_names.get('publication'))
@@ -635,15 +510,20 @@ class SQLDatabase(object):
       tables.append(self.table_names.get('author'))
       tables.append(self.table_names.get('tag'))
 
+      #modify default unix epoch time with a valid timestamp.
+      modified_timestamp = datetime.datetime(record.year, 1, 1)
+
       for index in range(len(tables)):
         content_type = self.search_content_type(self.get_app_label(tables[index]), self.get_model_id(tables[index]))
         if content_type is not None:
           for j_index in range(len(ids[index])):
             logs = self.search_logs(content_type.id, ids[index][j_index])
             for log in logs:
-              print log.id
-          
+              if modified_timestamp < log.action_time.replace(tzinfo=None):
+                modified_timestamp = log.action_time.replace(tzinfo=None)
+      return modified_timestamp
 
+    def get_thmodified_date(self, record):
       return datetime.datetime.now()
 
     def oai_query(self,
@@ -754,7 +634,7 @@ class SQLDatabase(object):
         for row in thesisQuery.distinct().offset(th_offset).limit(th_limit).execute():
           yield {'id': str(row.id) + '/' + row.slug,
                    'deleted': False,
-                   'modified': datetime.datetime.now(),
+                   'modified': self.get_thmodified_date(row),
                    'metadata': json.loads(self.get_thmetadata(row)),
                    'sets': ''
                    }
