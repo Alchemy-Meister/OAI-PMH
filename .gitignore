@@ -2,6 +2,7 @@ bin/
 doc/
 include/
 lib/
+MOAI.egg-info/
 .DS_Store
 ABOUT.txt
 HISTORY.txt
