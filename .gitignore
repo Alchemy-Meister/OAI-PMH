@@ -1,11 +1,13 @@
 bin/
-doc/
+dist/
+docs/
 include/
 lib/
 MOAI.egg-info/
 .DS_Store
 .hgignore
 .hgtags
+.Python
 ABOUT.txt
 HISTORY.txt
 LICENSE.txt
