@@ -4,6 +4,8 @@ include/
 lib/
 MOAI.egg-info/
 .DS_Store
+.hgignore
+.hgtags
 ABOUT.txt
 HISTORY.txt
 LICENSE.txt
