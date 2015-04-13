@@ -12,4 +12,4 @@ ABOUT.txt
 HISTORY.txt
 LICENSE.txt
 README.txt
-**.pyc
+moai/*.pyc
