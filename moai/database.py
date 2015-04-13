@@ -551,6 +551,15 @@ class SQLDatabase(object):
                 modified_timestamp = log.action_time.replace(tzinfo=None)
       return modified_timestamp
 
+    def generate_json(self, r_id, delete, modified_timestamp, metadata, sets):
+      return {  
+                'id': r_id,
+                'deleted': delete,
+                'modified': modified_timestamp,
+                'metadata': metadata,
+                'sets': sets
+              }
+
     def oai_query(self,
                   offset=0,
                   batch_size=20,
@@ -642,18 +651,22 @@ class SQLDatabase(object):
           publicationQuery.append_whereclause(self._publication.c.id == record_id)
           thesisQuery.append_whereclause(self._thesis.c.id == record_id)
 
-        pub_records = publicationQuery.distinct().offset(offset).limit(batch_size).execute().fetchall()
-        for row in pub_records:
-          yield {'id': str(row.id) + '/' + row.slug,
-                   'deleted': False,
-                   'modified': self.get_pubmodified_date(row),
-                   'metadata': json.loads(self.get_pubmetadata(row)),
-                   'sets': ''
-                   }
-        th_limit = batch_size - len(pub_records)
+        pub_records = 0
+        for row in publicationQuery.distinct().offset(offset).limit(batch_size).execute().fetchall():
+          modified_timestamp = self.get_pubmodified_date(row)
+          if from_date is not None:
+            if modified_timestamp >= from_date:
+              pub_records += 1
+              yield self.generate_json(str(row.id) + '/' + row.slug, False,
+                modified_timestamp, json.loads(self.get_pubmetadata(row)), '')
+          else:
+            yield self.generate_json(str(row.id) + '/' + row.slug, False,
+                modified_timestamp, json.loads(self.get_pubmetadata(row)), '')
+            
+        th_limit = batch_size - pub_records
         if th_limit < 0:
           th_limit = 0
-        th_offset = offset - len(pub_records)
+        th_offset = offset - pub_records
         if th_offset < 0:
           th_offset = 0
         for row in thesisQuery.distinct().offset(th_offset).limit(th_limit).execute():
