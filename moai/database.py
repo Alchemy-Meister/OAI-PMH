@@ -510,7 +510,6 @@ class SQLDatabase(object):
       tables.append(self.table_names.get('author'))
       tables.append(self.table_names.get('tag'))
 
-      #modify default unix epoch time with a valid timestamp.
       modified_timestamp = datetime.datetime(record.year, 1, 1)
 
       for index in range(len(tables)):
@@ -524,7 +523,33 @@ class SQLDatabase(object):
       return modified_timestamp
 
     def get_thmodified_date(self, record):
-      return datetime.datetime.now()
+      #tables to check: thesis, language, person, abstract
+      
+      ids = [[] for i in xrange(4)]
+      ids[0].append(record.id)
+      ids[1].append(record.main_language_id)
+      ids[2].append(record.author_id)
+      abstracts = self.search_all_thesis_abstract(record.id)
+      for abstract in abstracts:
+        ids[3].append(abstract.id)
+
+      tables = []
+      tables.append(self.table_names.get('thesis'))
+      tables.append(self.table_names.get('language'))
+      tables.append(self.table_names.get('author'))
+      tables.append(self.table_names.get('abstract'))
+
+      modified_timestamp = datetime.datetime(record.year, 1, 1)
+
+      for index in range(len(tables)):
+        content_type = self.search_content_type(self.get_app_label(tables[index]), self.get_model_id(tables[index]))
+        if content_type is not None:
+          for j_index in range(len(ids[index])):
+            logs = self.search_logs(content_type.id, ids[index][j_index])
+            for log in logs:
+              if modified_timestamp < log.action_time.replace(tzinfo=None):
+                modified_timestamp = log.action_time.replace(tzinfo=None)
+      return modified_timestamp
 
     def oai_query(self,
                   offset=0,
