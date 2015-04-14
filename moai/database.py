@@ -293,12 +293,17 @@ class SQLDatabase(object):
                    'description': row.description}
 
     def oai_earliest_datestamp(self):
-        """row = sql.select([self._records.c.modified],
-                         order_by=[sql.asc(self._records.c.modified)]
-                         ).limit(1).execute().fetchone()
-        if row:
-            return row[0]"""
-        return datetime.datetime(1970, 1, 1)
+        earliest_datestamp = datetime.datetime(1970, 1, 1)
+        publication_earliest_datestamp = sql.select([self._publication.c.year],
+          order_by=[sql.asc(self._publication.c.year)]).limit(1).execute().fetchone()
+        thesis_earliest_datestamp = sql.select([self._thesis.c.year],
+          order_by=[sql.asc(self._thesis.c.year)]).limit(1).execute().fetchone()
+        if publication_earliest_datestamp:
+          earliest_datestamp = publication_earliest_datestamp[0]
+        if thesis_earliest_datestamp:
+          if earliest_datestamp > thesis_earliest_datestamp[0]:
+            return datetime.datetime(thesis_earliest_datestamp[0], 1, 1)
+        return datetime.datetime(earliest_datestamp, 1, 1)
     
     def process_control_char_word_break(self, text):
       p = re.compile(ur'-\n', re.UNICODE)
@@ -576,22 +581,8 @@ class SQLDatabase(object):
         if batch_size < 0:
             batch_size = 0
 
-        # make sure until date is set, and not in future
-        if until_date == None or until_date > datetime.datetime.utcnow():
-            until_date = datetime.datetime.utcnow()
-
-
         query = self._records.select(
             order_by=[sql.desc(self._records.c.modified)])
-
-        # filter dates
-        query.append_whereclause(self._records.c.modified <= until_date)
-
-        if not identifier is None:
-            query.append_whereclause(self._records.c.record_id == identifier)
-
-        if not from_date is None:
-            query.append_whereclause(self._records.c.modified >= from_date)
 
         # filter sets
 
@@ -641,7 +632,8 @@ class SQLDatabase(object):
         thesisQuery = self._thesis.select()
         record_id = None
         slug = None
-        if not identifier is None:
+        
+        if identifier is not None:
           try:
             splitter = identifier.index('/')
             record_id = int(identifier[:splitter])
@@ -651,28 +643,36 @@ class SQLDatabase(object):
           publicationQuery.append_whereclause(self._publication.c.id == record_id)
           thesisQuery.append_whereclause(self._thesis.c.id == record_id)
 
+        if until_date == None or until_date > datetime.datetime.utcnow():
+          until_date = datetime.datetime.utcnow()
+
         pub_records = 0
         for row in publicationQuery.distinct().offset(offset).limit(batch_size).execute().fetchall():
           modified_timestamp = self.get_pubmodified_date(row)
           if from_date is not None:
-            if modified_timestamp >= from_date:
+            if modified_timestamp >= from_date and modified_timestamp <= until_date:
               pub_records += 1
               yield self.generate_json(str(row.id) + '/' + row.slug, False,
                 modified_timestamp, json.loads(self.get_pubmetadata(row)), '')
           else:
-            yield self.generate_json(str(row.id) + '/' + row.slug, False,
+            if modified_timestamp <= until_date:
+              pub_records += 1
+              yield self.generate_json(str(row.id) + '/' + row.slug, False,
                 modified_timestamp, json.loads(self.get_pubmetadata(row)), '')
-            
+
         th_limit = batch_size - pub_records
         if th_limit < 0:
           th_limit = 0
         th_offset = offset - pub_records
         if th_offset < 0:
           th_offset = 0
+
         for row in thesisQuery.distinct().offset(th_offset).limit(th_limit).execute():
-          yield {'id': str(row.id) + '/' + row.slug,
-                   'deleted': False,
-                   'modified': self.get_thmodified_date(row),
-                   'metadata': json.loads(self.get_thmetadata(row)),
-                   'sets': ''
-                   }
+          modified_timestamp = self.get_thmodified_date(row)
+          if from_date is not None:
+            if modified_timestamp >= from_date and modified_timestamp <= until_date:
+              yield self.generate_json(str(row.id) + '/' + row.slug, False,
+                self.get_thmodified_date(row), json.loads(self.get_thmetadata(row)), '')
+          elif modified_timestamp <= until_date:
+            yield self.generate_json(str(row.id) + '/' + row.slug, False,
+                self.get_thmodified_date(row), json.loads(self.get_thmetadata(row)), '')
