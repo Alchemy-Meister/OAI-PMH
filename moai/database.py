@@ -60,7 +60,9 @@ class SQLDatabase(object):
         {"id": "Book", "name": "Set Book",
           "description": "A set related to Books", "hidden": 0},
         {"id": "Book:Section", "name": "Set Book Section",
-          "description": "A set related to Book Sections", "hidden": 0}
+          "description": "A set related to Book Sections", "hidden": 0},
+        {"id": "Thesis", "name": "Set Thesis",
+          "description": "A set related to Thesis", "hidden": 0}
       ]""")
 
     def __init__(self, dburi=None):
@@ -398,6 +400,9 @@ class SQLDatabase(object):
         setspec = self.sets[7]
       return json.loads('{"id": ["' + setspec.get('id') + '"]}').get('id')
 
+    def get_thesis_setspec(self):
+      return json.loads('{"id": ["' + self.sets[8].get('id') + '"]}').get('id')
+
     def get_parent_type(self, dc_type, record_id):
       child = None
       if dc_type == 'Proceedings':
@@ -704,7 +709,7 @@ class SQLDatabase(object):
           if from_date is not None:
             if modified_timestamp >= from_date and modified_timestamp <= until_date:
               yield self.generate_json(str(row.id) + '/' + row.slug, False,
-                self.get_thmodified_date(row), json.loads(self.get_thmetadata(row)), self.sets[0].get('id'))
+                self.get_thmodified_date(row), json.loads(self.get_thmetadata(row)), self.get_thesis_setspec())
           elif modified_timestamp <= until_date:
             yield self.generate_json(str(row.id) + '/' + row.slug, False,
-                self.get_thmodified_date(row), json.loads(self.get_thmetadata(row)), self.sets[0].get('id'))
+                self.get_thmodified_date(row), json.loads(self.get_thmetadata(row)), self.get_thesis_setspec())
