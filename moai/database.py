@@ -43,6 +43,25 @@ class SQLDatabase(object):
                     'abstract': 'publications_thesisabstract'
                   }
 
+    #TODO add some real info here.
+    sets = json.loads(
+      """[
+        {"id": "Proceedings", "name": "Set Proceedings",
+          "description": "A set related to Proceedings", "hidden": 0},
+        {"id": "Proceedings:Conference Paper", "name": "Set Conference Paper", 
+          "description": "A set related to Conference Papers", "hidden": 0},
+        {"id": "Magazine", "name": "Set Magazine",
+          "description": "A set related to Magazines", "hidden": 0},
+        {"id": "Magazine:Article", "name": "Set Magazine Article",
+          "description": "A set related to Magazine Articles", "hidden": 0},
+        {"id": "Journal", "name": "Set Journal", "description": "A set related to Journals", "hidden": 0},
+        {"id": "Journal:Article", "name": "Set Journal Article",
+          "description": "A set related to Journal Articles", "hidden": 0},
+        {"id": "Book", "name": "Set Book",
+          "description": "A set related to Books", "hidden": 0},
+        {"id": "Book:Section", "name": "Set Book Section",
+          "description": "A set related to Book Sections", "hidden": 0}
+      ]""")
 
     def __init__(self, dburi=None):
         self._uri = dburi
@@ -238,18 +257,6 @@ class SQLDatabase(object):
 
         db.create_all()
         return db
-         
-    def get_record(self, oai_id):
-        row = self._records.select(
-            self._records.c.id == oai_id).execute().fetchone()
-        if row is None:
-            return
-        record = {'id': id,
-                  'deleted': 'False',
-                  'modified': '2015-01-01T00:00Z',
-                  'metadata': json.loads(row.title),
-                  'sets': 'lol'}
-        return record
 
     def get_set(self, oai_id):
         """row = self._sets.select(
@@ -285,12 +292,15 @@ class SQLDatabase(object):
                           from_obj=[self._sets]).execute().fetchone()[0]
 
     def oai_sets(self, offset=0, batch_size=20):
-        for row in self._sets.select(
-              self._sets.c.hidden == False
-            ).offset(offset).limit(batch_size).execute():
-            yield {'id': row.set_id,
-                   'name': row.name,
-                   'description': row.description}
+        index = offset
+        while index < offset + batch_size and index < len(self.sets):
+          if self.sets[index].get('hidden') == False:
+            yield {
+                    'id': self.sets[index].get('id'),
+                    'name': self.sets[index].get('name'),
+                    'description': self.sets[index].get('description')
+                  }
+          index += 1
 
     def oai_earliest_datestamp(self):
         earliest_datestamp = datetime.datetime(1970, 1, 1)
@@ -367,6 +377,26 @@ class SQLDatabase(object):
       return self._djangoLog.select().where(
         self._djangoLog.c.object_id == unicode(object_id)).where(
         self._djangoLog.c.content_type_id == content_type).execute().fetchall()
+
+    def get_publication_setspec(self, dc_type, record_id):
+      setspec = None
+      if dc_type == 'Proceedings':
+        setspec = self.sets[0]
+      elif dc_type == 'ConferencePaper':
+        setspec = self.sets[1]
+      elif dc_type == 'Magazine':
+        setspec = self.sets[2]
+      elif dc_type == 'MagazineArticle':
+        setspec = self.sets[3]
+      elif dc_type == 'Journal':
+        setspec = self.sets[4]
+      elif dc_type == 'JournalArticle':
+        setspec = self.sets[5]
+      elif dc_type == 'Book':
+        setspec = self.sets[6]
+      elif dc_type == 'BookSection':
+        setspec = self.sets[7]
+      return json.loads('{"id": ["' + setspec.get('id') + '"]}').get('id')
 
     def get_parent_type(self, dc_type, record_id):
       child = None
@@ -653,12 +683,14 @@ class SQLDatabase(object):
             if modified_timestamp >= from_date and modified_timestamp <= until_date:
               pub_records += 1
               yield self.generate_json(str(row.id) + '/' + row.slug, False,
-                modified_timestamp, json.loads(self.get_pubmetadata(row)), '')
+                modified_timestamp, json.loads(self.get_pubmetadata(row)), 
+                  self.get_publication_setspec(row.child_type, row.id))
           else:
             if modified_timestamp <= until_date:
               pub_records += 1
               yield self.generate_json(str(row.id) + '/' + row.slug, False,
-                modified_timestamp, json.loads(self.get_pubmetadata(row)), '')
+                modified_timestamp, json.loads(self.get_pubmetadata(row)), 
+                  self.get_publication_setspec(row.child_type, row.id))
 
         th_limit = batch_size - pub_records
         if th_limit < 0:
@@ -672,7 +704,7 @@ class SQLDatabase(object):
           if from_date is not None:
             if modified_timestamp >= from_date and modified_timestamp <= until_date:
               yield self.generate_json(str(row.id) + '/' + row.slug, False,
-                self.get_thmodified_date(row), json.loads(self.get_thmetadata(row)), '')
+                self.get_thmodified_date(row), json.loads(self.get_thmetadata(row)), self.sets[0].get('id'))
           elif modified_timestamp <= until_date:
             yield self.generate_json(str(row.id) + '/' + row.slug, False,
-                self.get_thmodified_date(row), json.loads(self.get_thmetadata(row)), '')
+                self.get_thmodified_date(row), json.loads(self.get_thmetadata(row)), self.sets[0].get('id'))
