@@ -4,6 +4,7 @@ docs/
 include/
 lib/
 MOAI.egg-info/
+validations/
 .DS_Store
 .hgignore
 .hgtags
