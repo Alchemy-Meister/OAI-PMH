@@ -33,7 +33,7 @@ class OAIServer(object):
             protocolVersion='2.0',
             adminEmails=self.config.admins,
             earliestDatestamp=self.db.oai_earliest_datestamp(),
-            deletedRecord='transient',
+            deletedRecord='no',
             granularity='YYYY-MM-DDThh:mm:ssZ',
             compression=['identity'],
             toolkit_description=False)
@@ -44,7 +44,7 @@ class OAIServer(object):
         moai_egg = pkg_resources.working_set.find(
             pkg_resources.Requirement.parse('MOAI'))
         
-        if moai_egg and pyoai_egg:
+        """if moai_egg and pyoai_egg:
             version = '<version>%s (using pyoai%s)</version>' % (
                 moai_egg.version,
                 pyoai_egg.version)
@@ -57,7 +57,7 @@ class OAIServer(object):
             '<title>MOAI</title>'
             '%s'
             '<URL>http://moai.infrae.com</URL>'
-            '</toolkit>' % version)
+            '</toolkit>' % version)"""
             
         return result
 
