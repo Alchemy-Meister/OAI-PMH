@@ -662,7 +662,7 @@ class SQLDatabase(object):
                    'metadata': json.loads(row.metadata),
                    'sets': self.get_setrefs(row.record_id)
                    }"""
-        
+
         publicationQuery = self._publication.select()
         thesisQuery = self._thesis.select()
         record_id = None
@@ -684,17 +684,32 @@ class SQLDatabase(object):
         pub_records = 0
         for row in publicationQuery.distinct().offset(offset).limit(batch_size).execute().fetchall():
           modified_timestamp = self.get_pubmodified_date(row)
+          oai_set = self.get_publication_setspec(row.child_type, row.id)
           if from_date is not None:
             if modified_timestamp >= from_date and modified_timestamp <= until_date:
-              pub_records += 1
-              yield self.generate_json(str(row.id) + '/' + row.slug, False,
-                modified_timestamp, json.loads(self.get_pubmetadata(row)), 
-                  self.get_publication_setspec(row.child_type, row.id))
+              if needed_sets is not None:
+                if oai_set[0] in needed_sets:
+                  pub_records += 1
+                  yield self.generate_json(str(row.id) + '/' + row.slug, False,
+                    modified_timestamp, json.loads(self.get_pubmetadata(row)), 
+                    oai_set)
+              else:
+                pub_records += 1
+                yield self.generate_json(str(row.id) + '/' + row.slug, False,
+                  modified_timestamp, json.loads(self.get_pubmetadata(row)), 
+                  oai_set)
           else:
             if modified_timestamp <= until_date:
-              pub_records += 1
-              yield self.generate_json(str(row.id) + '/' + row.slug, False,
-                modified_timestamp, json.loads(self.get_pubmetadata(row)), 
+              if needed_sets is not None:
+                if oai_set[0] in needed_sets:
+                  pub_records += 1
+                  yield self.generate_json(str(row.id) + '/' + row.slug, False,
+                    modified_timestamp, json.loads(self.get_pubmetadata(row)), 
+                    self.get_publication_setspec(row.child_type, row.id))
+              else:
+                pub_records += 1
+                yield self.generate_json(str(row.id) + '/' + row.slug, False,
+                  modified_timestamp, json.loads(self.get_pubmetadata(row)), 
                   self.get_publication_setspec(row.child_type, row.id))
 
         th_limit = batch_size - pub_records
@@ -706,10 +721,21 @@ class SQLDatabase(object):
 
         for row in thesisQuery.distinct().offset(th_offset).limit(th_limit).execute():
           modified_timestamp = self.get_thmodified_date(row)
+          oai_set = self.get_thesis_setspec()
           if from_date is not None:
             if modified_timestamp >= from_date and modified_timestamp <= until_date:
-              yield self.generate_json(str(row.id) + '/' + row.slug, False,
-                self.get_thmodified_date(row), json.loads(self.get_thmetadata(row)), self.get_thesis_setspec())
+              if needed_sets is not None:
+                if oai_set[0] in needed_sets:
+                  yield self.generate_json(str(row.id) + '/' + row.slug, False,
+                    self.get_thmodified_date(row), json.loads(self.get_thmetadata(row)), oai_set)
+              else:
+                yield self.generate_json(str(row.id) + '/' + row.slug, False,
+                  self.get_thmodified_date(row), json.loads(self.get_thmetadata(row)), oai_set)
           elif modified_timestamp <= until_date:
-            yield self.generate_json(str(row.id) + '/' + row.slug, False,
-                self.get_thmodified_date(row), json.loads(self.get_thmetadata(row)), self.get_thesis_setspec())
+            if needed_sets is not None:
+              if oai_set[0] in needed_sets:
+                yield self.generate_json(str(row.id) + '/' + row.slug, False,
+                  self.get_thmodified_date(row), json.loads(self.get_thmetadata(row)), oai_set)
+            else:
+              yield self.generate_json(str(row.id) + '/' + row.slug, False,
+                  self.get_thmodified_date(row), json.loads(self.get_thmetadata(row)), oai_set)
