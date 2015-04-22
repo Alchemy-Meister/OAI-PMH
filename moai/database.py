@@ -687,7 +687,7 @@ class SQLDatabase(object):
           oai_set = self.get_publication_setspec(row.child_type, row.id)
           if from_date is not None:
             if modified_timestamp >= from_date and modified_timestamp <= until_date:
-              if needed_sets is not None:
+              if needed_sets:
                 if oai_set[0] in needed_sets:
                   pub_records += 1
                   yield self.generate_json(str(row.id) + '/' + row.slug, False,
@@ -700,7 +700,7 @@ class SQLDatabase(object):
                   oai_set)
           else:
             if modified_timestamp <= until_date:
-              if needed_sets is not None:
+              if needed_sets:
                 if oai_set[0] in needed_sets:
                   pub_records += 1
                   yield self.generate_json(str(row.id) + '/' + row.slug, False,
@@ -724,7 +724,7 @@ class SQLDatabase(object):
           oai_set = self.get_thesis_setspec()
           if from_date is not None:
             if modified_timestamp >= from_date and modified_timestamp <= until_date:
-              if needed_sets is not None:
+              if needed_sets:
                 if oai_set[0] in needed_sets:
                   yield self.generate_json(str(row.id) + '/' + row.slug, False,
                     self.get_thmodified_date(row), json.loads(self.get_thmetadata(row)), oai_set)
@@ -732,7 +732,7 @@ class SQLDatabase(object):
                 yield self.generate_json(str(row.id) + '/' + row.slug, False,
                   self.get_thmodified_date(row), json.loads(self.get_thmetadata(row)), oai_set)
           elif modified_timestamp <= until_date:
-            if needed_sets is not None:
+            if needed_sets:
               if oai_set[0] in needed_sets:
                 yield self.generate_json(str(row.id) + '/' + row.slug, False,
                   self.get_thmodified_date(row), json.loads(self.get_thmetadata(row)), oai_set)
