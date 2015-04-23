@@ -380,7 +380,7 @@ class SQLDatabase(object):
         self._djangoLog.c.object_id == unicode(object_id)).where(
         self._djangoLog.c.content_type_id == content_type).execute().fetchall()
 
-    def get_publication_setspec(self, dc_type, record_id):
+    def get_publication_setspec(self, dc_type):
       setspec = None
       if dc_type == 'Proceedings':
         setspec = self.sets[0]
@@ -667,6 +667,7 @@ class SQLDatabase(object):
         thesisQuery = self._thesis.select()
         record_id = None
         slug = None
+        search_thesis = True
         
         if identifier is not None:
           try:
@@ -681,61 +682,44 @@ class SQLDatabase(object):
         if until_date == None or until_date > datetime.datetime.utcnow():
           until_date = datetime.datetime.utcnow()
 
+        if needed_sets:
+          publicationQuery.append_whereclause(self._publication.c.child_type.in_(needed_sets))
+          if self.sets[8].get('id') not in needed_sets:
+            search_thesis = False
         pub_records = 0
-        for row in publicationQuery.distinct().offset(offset).limit(batch_size).execute().fetchall():
+        
+        publicationQuery = publicationQuery.distinct().offset(offset).limit(batch_size).execute().fetchall()
+        for row in publicationQuery:
           modified_timestamp = self.get_pubmodified_date(row)
-          oai_set = self.get_publication_setspec(row.child_type, row.id)
+          oai_set = self.get_publication_setspec(row.child_type)
           if from_date is not None:
             if modified_timestamp >= from_date and modified_timestamp <= until_date:
-              if needed_sets:
-                if oai_set[0] in needed_sets:
-                  pub_records += 1
-                  yield self.generate_json(str(row.id) + '/' + row.slug, False,
-                    modified_timestamp, json.loads(self.get_pubmetadata(row)), 
-                    oai_set)
-              else:
                 pub_records += 1
                 yield self.generate_json(str(row.id) + '/' + row.slug, False,
                   modified_timestamp, json.loads(self.get_pubmetadata(row)), 
                   oai_set)
           else:
             if modified_timestamp <= until_date:
-              if needed_sets:
-                if oai_set[0] in needed_sets:
-                  pub_records += 1
-                  yield self.generate_json(str(row.id) + '/' + row.slug, False,
-                    modified_timestamp, json.loads(self.get_pubmetadata(row)), 
-                    self.get_publication_setspec(row.child_type, row.id))
-              else:
                 pub_records += 1
                 yield self.generate_json(str(row.id) + '/' + row.slug, False,
                   modified_timestamp, json.loads(self.get_pubmetadata(row)), 
-                  self.get_publication_setspec(row.child_type, row.id))
+                  oai_set)
 
-        th_limit = batch_size - pub_records
-        if th_limit < 0:
+        if not search_thesis:
           th_limit = 0
-        th_offset = offset - pub_records
-        if th_offset < 0:
+        else:
+          th_limit = batch_size - pub_records
+        if pub_records:
           th_offset = 0
-
-        for row in thesisQuery.distinct().offset(th_offset).limit(th_limit).execute():
+        
+        #TODO change the zero default offset for real value.
+        for row in thesisQuery.distinct().offset(0).limit(th_limit).execute():
           modified_timestamp = self.get_thmodified_date(row)
           oai_set = self.get_thesis_setspec()
           if from_date is not None:
             if modified_timestamp >= from_date and modified_timestamp <= until_date:
-              if needed_sets:
-                if oai_set[0] in needed_sets:
-                  yield self.generate_json(str(row.id) + '/' + row.slug, False,
-                    self.get_thmodified_date(row), json.loads(self.get_thmetadata(row)), oai_set)
-              else:
-                yield self.generate_json(str(row.id) + '/' + row.slug, False,
-                  self.get_thmodified_date(row), json.loads(self.get_thmetadata(row)), oai_set)
-          elif modified_timestamp <= until_date:
-            if needed_sets:
-              if oai_set[0] in needed_sets:
-                yield self.generate_json(str(row.id) + '/' + row.slug, False,
-                  self.get_thmodified_date(row), json.loads(self.get_thmetadata(row)), oai_set)
-            else:
               yield self.generate_json(str(row.id) + '/' + row.slug, False,
-                  self.get_thmodified_date(row), json.loads(self.get_thmetadata(row)), oai_set)
+                self.get_thmodified_date(row), json.loads(self.get_thmetadata(row)), oai_set)
+          elif modified_timestamp <= until_date:
+              yield self.generate_json(str(row.id) + '/' + row.slug, False,
+                self.get_thmodified_date(row), json.loads(self.get_thmetadata(row)), oai_set)
