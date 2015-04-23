@@ -550,17 +550,22 @@ class SQLDatabase(object):
       tables.append(self.table_names.get('author'))
       tables.append(self.table_names.get('tag'))
 
-      modified_timestamp = datetime.datetime(record.year, 1, 1)
+      logs_query = sql.select([self._djangoLog.c.action_time],
+        from_obj=[self._djangoLog]).order_by(sql.desc(self._djangoLog.c.action_time))
+      where_clauses = []
 
       for index in range(len(tables)):
         content_type = self.search_content_type(self.get_app_label(tables[index]), self.get_model_id(tables[index]))
         if content_type is not None:
           for j_index in range(len(ids[index])):
-            logs = self.search_logs(content_type.id, ids[index][j_index])
-            for log in logs:
-              if modified_timestamp < log.action_time.replace(tzinfo=None):
-                modified_timestamp = log.action_time.replace(tzinfo=None)
-      return modified_timestamp
+            where_clauses.append(sql.and_(
+              self._djangoLog.c.content_type_id == content_type.id, self._djangoLog.c.object_id == unicode(ids[index][j_index])))
+      logs_query.append_whereclause(sql.or_(*where_clauses))
+      row = logs_query.execute().fetchone()
+      if row is not None:
+        return row[0].replace(tzinfo=None)
+      else:
+        return datetime.datetime(record.year, 1, 1)
 
     def get_thmodified_date(self, record):
       #tables to check: thesis, language, person, abstract
@@ -579,17 +584,22 @@ class SQLDatabase(object):
       tables.append(self.table_names.get('author'))
       tables.append(self.table_names.get('abstract'))
 
-      modified_timestamp = datetime.datetime(record.year, 1, 1)
+      logs_query = sql.select([self._djangoLog.c.action_time],
+        from_obj=[self._djangoLog]).order_by(sql.desc(self._djangoLog.c.action_time))
+      where_clauses = []
 
       for index in range(len(tables)):
         content_type = self.search_content_type(self.get_app_label(tables[index]), self.get_model_id(tables[index]))
         if content_type is not None:
           for j_index in range(len(ids[index])):
-            logs = self.search_logs(content_type.id, ids[index][j_index])
-            for log in logs:
-              if modified_timestamp < log.action_time.replace(tzinfo=None):
-                modified_timestamp = log.action_time.replace(tzinfo=None)
-      return modified_timestamp
+            where_clauses.append(sql.and_(
+              self._djangoLog.c.content_type_id == content_type.id, self._djangoLog.c.object_id == unicode(ids[index][j_index])))
+      logs_query.append_whereclause(sql.or_(*where_clauses))
+      row = logs_query.execute().fetchone()
+      if row is not None:
+        return row[0].replace(tzinfo=None)
+      else:
+        return datetime.datetime(record.year, 1, 1)
 
     def generate_json(self, r_id, delete, modified_timestamp, metadata, sets):
       return {  
@@ -686,8 +696,9 @@ class SQLDatabase(object):
           publicationQuery.append_whereclause(self._publication.c.child_type.in_(needed_sets))
           if self.sets[8].get('id') not in needed_sets:
             search_thesis = False
-        pub_records = 0
         
+        pub_records = 0
+
         publicationQuery = publicationQuery.distinct().offset(offset).limit(batch_size).execute().fetchall()
         for row in publicationQuery:
           modified_timestamp = self.get_pubmodified_date(row)
