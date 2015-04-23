@@ -696,35 +696,41 @@ class SQLDatabase(object):
           publicationQuery.append_whereclause(self._publication.c.child_type.in_(needed_sets))
           if self.sets[8].get('id') not in needed_sets:
             search_thesis = False
-        
-        pub_records = 0
 
-        publicationQuery = publicationQuery.distinct().offset(offset).limit(batch_size).execute().fetchall()
-        for row in publicationQuery:
+        totalrows = 0        
+        pub_records = 0
+        publications = []
+
+        for row in publicationQuery.distinct().order_by(sql.asc(self._publication.c.id)).execute().fetchall():
           modified_timestamp = self.get_pubmodified_date(row)
-          oai_set = self.get_publication_setspec(row.child_type)
           if from_date is not None:
             if modified_timestamp >= from_date and modified_timestamp <= until_date:
-                pub_records += 1
-                yield self.generate_json(str(row.id) + '/' + row.slug, False,
-                  modified_timestamp, json.loads(self.get_pubmetadata(row)), 
-                  oai_set)
-          else:
-            if modified_timestamp <= until_date:
-                pub_records += 1
-                yield self.generate_json(str(row.id) + '/' + row.slug, False,
-                  modified_timestamp, json.loads(self.get_pubmetadata(row)), 
-                  oai_set)
+                totalrows += 1
+                publications.append({'record': row, 'modified': modified_timestamp})
+          elif modified_timestamp <= until_date:
+                totalrows += 1
+                publications.append({'record': row, 'modified': modified_timestamp})
 
+        if offset < totalrows:
+          th_offset = 0
+          index = offset
+          while index < len(publications) and pub_records < batch_size:
+            yield self.generate_json(str(publications[index].get('record').id)
+              + '/' + publications[index].get('record').slug, False,
+              publications[index].get('modified'),
+              json.loads(self.get_pubmetadata(publications[index].get('record'))), 
+              self.get_publication_setspec(publications[index].get('record').child_type))
+            index += 1
+            pub_records += 1
+        else:
+          th_offset = offset - totalrows
         if not search_thesis:
           th_limit = 0
         else:
           th_limit = batch_size - pub_records
-        if pub_records:
-          th_offset = 0
         
         #TODO change the zero default offset for real value.
-        for row in thesisQuery.distinct().offset(0).limit(th_limit).execute():
+        for row in thesisQuery.distinct().offset(th_offset).limit(th_limit).execute():
           modified_timestamp = self.get_thmodified_date(row)
           oai_set = self.get_thesis_setspec()
           if from_date is not None:
@@ -732,5 +738,5 @@ class SQLDatabase(object):
               yield self.generate_json(str(row.id) + '/' + row.slug, False,
                 self.get_thmodified_date(row), json.loads(self.get_thmetadata(row)), oai_set)
           elif modified_timestamp <= until_date:
-              yield self.generate_json(str(row.id) + '/' + row.slug, False,
-                self.get_thmodified_date(row), json.loads(self.get_thmetadata(row)), oai_set)
+            yield self.generate_json(str(row.id) + '/' + row.slug, False,
+              self.get_thmodified_date(row), json.loads(self.get_thmetadata(row)), oai_set)
