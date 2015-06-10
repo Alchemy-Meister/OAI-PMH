@@ -9,8 +9,5 @@ validations/
 .hgignore
 .hgtags
 .Python
-ABOUT.txt
-HISTORY.txt
 LICENSE.txt
-README.txt
 moai/*.pyc
