@@ -11,3 +11,4 @@ validations/
 .Python
 LICENSE.txt
 moai/*.pyc
+moai/metadata/*.pyc
