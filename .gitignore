@@ -10,6 +10,7 @@ validations/
 .hgtags
 .Python
 LICENSE.txt
+pip-selfcheck.json
 moai/*.pyc
 moai/metadata/*.pyc
 moai/provider/*.pyc
