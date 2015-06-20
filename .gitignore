@@ -12,3 +12,4 @@ validations/
 LICENSE.txt
 moai/*.pyc
 moai/metadata/*.pyc
+moai/provider/*.pyc
