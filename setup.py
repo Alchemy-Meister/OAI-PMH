@@ -59,6 +59,7 @@ setup(
     'paste',
     'pasteDeploy',
     'pasteScript',
+    'psycopg2',
     'sqlalchemy',
     ],
     test_suite='moai.test.suite'
